@@ -107,14 +107,12 @@ df_normal = df[df['Group'] == 'Normal-day'].copy()
 
 # Base Plotly styling dictionary 
 PLOT_TEMPLATE = dict(
-    layout=go.Layout(
-        template='plotly_dark',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="Inter, sans-serif", color="#8F9CA3"),
-        title=dict(font=dict(size=18, color="#E2E8F0")),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
+    template='plotly_dark',
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    font=dict(family="Inter, sans-serif", color="#8F9CA3"),
+    title_font=dict(size=18, color="#E2E8F0"),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
 # ==========================================
