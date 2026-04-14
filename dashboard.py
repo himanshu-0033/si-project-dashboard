@@ -8,23 +8,22 @@ import plotly.figure_factory as ff
 # ==========================================
 # 1. PAGE CONFIGURATION & CUSTOM CSS
 # ==========================================
-st.set_page_config(page_title="NIFTY 50 & Fed Rate Cuts", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
+st.set_page_config(page_title="NIFTY 50 & Fed Rate Cuts", layout="wide", initial_sidebar_state="expanded")
 
-# Inject Custom CSS for premium look
+# Inject Custom CSS for premium professional look
 st.markdown("""
 <style>
     /* Main background */
     .stApp {
-        background-color: #0E1117;
+        background-color: #000000;
     }
     
     /* Custom Metric Styling */
     div[data-testid="metric-container"] {
-        background-color: #1E2329;
-        border: 1px solid #2B303B;
+        background-color: #0A0A0A;
+        border: 1px solid #1F1F1F;
         padding: 5% 5% 5% 10%;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        border-radius: 4px;
     }
     
     /* Hide top menu and footer for clean look */
@@ -33,14 +32,14 @@ st.markdown("""
     
     /* Header typography */
     h1 {
-        color: #E2E8F0;
+        color: #FFFFFF;
         font-family: 'Inter', sans-serif;
         font-weight: 700;
         letter-spacing: -1px;
     }
     
-    h2, h3, h4 {
-        color: #94A3B8;
+    h2, h3, h4, h5 {
+        color: #CCCCCC;
         font-family: 'Inter', sans-serif;
     }
     
@@ -57,9 +56,14 @@ st.markdown("""
         gap: 1rem;
         padding-top: 10px;
         padding-bottom: 10px;
+        color: #FFFFFF;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Colors for strictly red/green rendering
+GREEN = "#00C805"
+RED = "#FF333A"
 
 # ==========================================
 # 2. DATA GENERATION
@@ -79,7 +83,6 @@ def load_data():
     
     df_event = pd.DataFrame({'Return': event_returns, 'Group': 'Event-day', 'Magnitude_bps': magnitudes, 'Crisis_Era': eras})
     
-    # Emulate severe VIX spikes during crisis environments
     df_event['VIX_Spike'] = np.where(df_event['Crisis_Era'] == 'Non-Crisis', 
                                      np.random.uniform(15, 25, size=31),
                                      np.random.uniform(30, 85, size=31))
@@ -115,7 +118,6 @@ df, corr_matrix, df_sim = load_data()
 # ==========================================
 # 3. SIDEBAR NAVIGATION & FEATURES
 # ==========================================
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/e/e4/Federal_Reserve_Board_badge.svg", width=120)
 st.sidebar.markdown("## Global Macro Parameters")
 st.sidebar.markdown('Configure the conditions of FOMC rate cuts below:')
 
@@ -123,9 +125,9 @@ selected_era = st.sidebar.selectbox("Macro Environment (Epoch)", ['All'] + list(
 min_cut = st.sidebar.slider("Minimum Interest Rate Cut (bps)", min_value=25, max_value=100, step=25, value=25)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("## ⚙️ Advanced Features")
-show_ai_analyst = st.sidebar.checkbox("🤖 Auto-Analyst Insights Mode", value=True, help="Toggle AI text generation regarding statistical outputs")
-show_3d_modelling = st.sidebar.checkbox("🧊 Enable 3D Surface Graphs", value=True, help="Note: 3D graphs require desktop browsers for best performance.")
+st.sidebar.markdown("## Advanced Features")
+show_ai_analyst = st.sidebar.checkbox("Auto-Analyst Insights Mode", value=True)
+show_3d_modelling = st.sidebar.checkbox("Enable 3D Surface Graphs", value=True)
 
 # Filter Logic
 df_events = df[df['Group'] == 'Event-day'].copy()
@@ -140,16 +142,21 @@ PLOT_TEMPLATE = dict(
     template='plotly_dark',
     paper_bgcolor='rgba(0,0,0,0)',
     plot_bgcolor='rgba(0,0,0,0)',
-    font=dict(family="Inter, sans-serif", color="#8F9CA3"),
-    title_font=dict(size=18, color="#E2E8F0"),
+    font=dict(family="Inter, sans-serif", color="#CCCCCC"),
+    title_font=dict(size=18, color="#FFFFFF"),
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
+
+# Color maps mapped strictly to Red / Green
+dir_color_map = {'Positive': GREEN, 'Negative': RED}
+group_color_map = {'Normal-day': GREEN, 'Event-day': RED}
+scenario_map = {'Routine Easing': GREEN, 'Panic Cut (Crisis)': RED, 'Historical Baseline': '#005500'} # Darker green for baseline
 
 # ==========================================
 # 4. DASHBOARD HEADER & KPIs
 # ==========================================
-st.title("🏦 US Fed Rate Cut Impact Explorer")
-st.markdown("<p style='font-size: 1.1rem; color: #94A3B8; margin-bottom: 2rem;'>Analyzing the immediate tail-risk dynamics of FOMC rate cuts on the NIFTY 50 Index</p>", unsafe_allow_html=True)
+st.title("US Fed Rate Cut Impact Explorer")
+st.markdown("<p style='font-size: 1.1rem; color: #AAAAAA; margin-bottom: 2rem;'>Analyzing the immediate tail-risk dynamics of FOMC rate cuts on the NIFTY 50 Index</p>", unsafe_allow_html=True)
 
 # KPI Row
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -157,7 +164,7 @@ with kpi1:
     st.metric("Analyzed Events", f"{len(df_events)}")
 with kpi2:
     win_rate = (len(df_events[df_events['Direction'] == 'Positive']) / len(df_events) * 100) if len(df_events) > 0 else 0
-    st.metric("Implied Win Rate", f"{win_rate:.1f}%", help="% of events resulting in positive returns")
+    st.metric("Implied Win Rate", f"{win_rate:.1f}%")
 with kpi3:
     if len(df_events) > 0:
         mean_abs_return = df_events['Abs_Return'].mean()
@@ -175,14 +182,14 @@ with kpi4:
 # Dynamic Analyst Text Generator
 if show_ai_analyst and len(df_events) > 0:
     st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("🤖 Auto-Analyst Insights & Statistical Summary", expanded=True):
+    with st.expander("Auto-Analyst Insights & Statistical Summary", expanded=True):
         st.markdown(f"""
         **Quantitative Insight Engine Activated:**
         Based on our proprietary screening of **{len(df_events)}** interest rate cuts under the `{selected_era}` epoch framework:
         
-        * 📉 **Bearish Dominance:** The index posted a negative return during **{100 - win_rate:.1f}%** of the filtered macroeconomic windows.
-        * ⚠️ **Tail Risk Detection:** The maximum catastrophic failure observed within this framework is **{int(max_drawdown)}%**. This signifies severe negative skewness during Fed pivot environments. 
-        * 💡 **Recommendation:** Following a blind "Buy The Cut" algorithm natively yields a mathematical *negative expectancy* when evaluating these exact parameters. Capital allocation should be severely penalized or delta-hedged.
+        * **Bearish Dominance:** The index posted a negative return during **{100 - win_rate:.1f}%** of the filtered macroeconomic windows.
+        * **Tail Risk Detection:** The maximum catastrophic failure observed within this framework is **{int(max_drawdown)}%**. This signifies severe negative skewness during Fed pivot environments. 
+        * **Recommendation:** Following a blind "Buy The Cut" algorithm natively yields a mathematical negative expectancy when evaluating these exact parameters. Capital allocation should be severely penalized or delta-hedged.
         """)
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -191,16 +198,15 @@ st.markdown("<br>", unsafe_allow_html=True)
 # 5. DASHBOARD TABS
 # ==========================================
 tab_overview, tab_distribution, tab_volatility, tab_macro, tab_data = st.tabs([
-    "📊 Market Sentiment", 
-    "📈 Distribution Properties", 
-    "⚡ Volatility Dynamics",
-    "🌍 Macro & Simulations",
-    "🗂️ Raw Data Explorer"
+    "Market Sentiment", 
+    "Distribution Properties", 
+    "Volatility Dynamics",
+    "Macro & Simulations",
+    "Raw Data Explorer"
 ])
 
 # ------------- TAB 1: OVERVIEW -------------
 with tab_overview:
-    color_map = {'Dot-com (2001)':'#3B82F6', 'GFC (2008)':'#EC4899', 'COVID-19 (2020)':'#8B5CF6', 'Non-Crisis':'#10B981'}
     col1, col2 = st.columns([1, 1.2])
 
     with col1:
@@ -208,40 +214,38 @@ with tab_overview:
             fig1 = go.Figure(data=[go.Pie(
                 labels=df_events['Direction'], 
                 hole=0.5, 
-                marker_colors=['#00D2A6', '#FF4B4B'] if df_events['Direction'].iloc[0] == 'Positive' else ['#FF4B4B', '#00D2A6'],
+                marker_colors=[GREEN, RED] if df_events['Direction'].iloc[0] == 'Positive' else [RED, GREEN],
                 textinfo='label+percent',
                 hovertemplate="<b>%{label}</b><br>Count: %{value}<extra></extra>"
             )])
-            fig1.update_layout(**PLOT_TEMPLATE, title='Event Day Sentiment Outlook')
+            fig1.update_layout(**PLOT_TEMPLATE, title='Event Day Sentiment Outlook', showlegend=True)
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         if len(df_events) > 0:
             fig3 = px.scatter(
-                df_events, x='Magnitude_bps', y='Return', color='Crisis_Era',
+                df_events, x='Magnitude_bps', y='Return', color='Direction',
                 size='Abs_Return', size_max=25,
                 labels={'Magnitude_bps': 'Fed Cut Magnitude (bps)', 'Return': 'NIFTY Return (%)'},
-                color_discrete_map=color_map,
-                hover_data=['Crisis_Era']
+                color_discrete_map=dir_color_map
             )
             fig3.update_layout(**PLOT_TEMPLATE, title='Return Dispersal by Cut Magnitude')
-            fig3.add_hline(y=0, line_dash="dash", line_color="#718096", opacity=0.5)
+            fig3.add_hline(y=0, line_dash="dash", line_color="#333333", opacity=0.5)
             st.plotly_chart(fig3, use_container_width=True)
             
     if show_3d_modelling and len(df_events) > 0:
-        st.markdown("<h5 style='color:#E2E8F0; margin-top:2rem;'>🧊 3D Volatility Risk Surface</h5>", unsafe_allow_html=True)
+        st.markdown("<h5 style='color:#E2E8F0; margin-top:2rem;'>3D Volatility Risk Surface</h5>", unsafe_allow_html=True)
         fig_3d = px.scatter_3d(
             df_events, x='Magnitude_bps', y='VIX_Spike', z='Return', 
-            color='Crisis_Era', size='Abs_Return', size_max=20, opacity=0.85,
-            color_discrete_map=color_map,
+            color='Direction', size='Abs_Return', size_max=20, opacity=0.85,
+            color_discrete_map=dir_color_map,
             labels={'Magnitude_bps': 'Cut Magnitude (bps)', 'VIX_Spike': 'India VIX', 'Return': 'Return (%)'}
         )
         fig_3d.update_layout(**PLOT_TEMPLATE, height=600, margin=dict(l=0, r=0, b=0, t=0))
-        # Custom 3D Axis styling
         fig_3d.update_scenes(
-            xaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#333"),
-            yaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#333"),
-            zaxis=dict(backgroundcolor="rgba(0,0,0,0)", gridcolor="#333"),
+            xaxis=dict(backgroundcolor="#000000", gridcolor="#222222"),
+            yaxis=dict(backgroundcolor="#000000", gridcolor="#222222"),
+            zaxis=dict(backgroundcolor="#000000", gridcolor="#222222"),
         )
         st.plotly_chart(fig_3d, use_container_width=True)
 
@@ -254,12 +258,12 @@ with tab_distribution:
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(
             x=df_normal['Return'], name='Normal Environment', 
-            marker_color='#475569', opacity=0.4, histnorm='probability density', nbinsx=100
+            marker_color=GREEN, opacity=0.6, histnorm='probability density', nbinsx=100
         ))
         if len(df_events) > 0:
             fig2.add_trace(go.Histogram(
                 x=df_events['Return'], name='Post-Cut Environment', 
-                marker_color='#3B82F6', opacity=0.8, histnorm='probability density', nbinsx=30
+                marker_color=RED, opacity=0.8, histnorm='probability density', nbinsx=30
             ))
         fig2.update_layout(
             **PLOT_TEMPLATE, barmode='overlay', title='',
@@ -271,7 +275,7 @@ with tab_distribution:
         st.markdown("<h5 style='color:#E2E8F0;'>Probability Density (Violin)</h5>", unsafe_allow_html=True)
         combined_df = pd.concat([df_normal, df_events])
         fig_violin = px.violin(combined_df, y="Return", color="Group", box=True, 
-                               color_discrete_map={'Normal-day':'#64748B', 'Event-day':'#EC4899'})
+                               color_discrete_map=group_color_map)
         fig_violin.update_layout(**PLOT_TEMPLATE, title='', showlegend=False, height=450)
         st.plotly_chart(fig_violin, use_container_width=True)
 
@@ -284,10 +288,10 @@ with tab_volatility:
         combined_df = pd.concat([df_normal, df_events])
         fig5 = px.box(
             combined_df, x='Group', y='Return', color='Group',
-            color_discrete_map={'Normal-day':'#64748B', 'Event-day':'#8B5CF6'}
+            color_discrete_map=group_color_map
         )
         fig5.update_layout(**PLOT_TEMPLATE, title='', showlegend=False)
-        fig5.update_traces(quartilemethod="inclusive")
+        fig5.update_traces(quartilemethod="inclusive", marker=dict(color=RED))
         st.plotly_chart(fig5, use_container_width=True)
 
     with col2:
@@ -297,7 +301,7 @@ with tab_volatility:
         fig4 = go.Figure([go.Bar(
             x=['Normal Baseline', 'Fed Cut Days'], 
             y=[mean_abs_normal, mean_abs_event],
-            marker_color=['#64748B', '#F59E0B'],
+            marker_color=[GREEN, RED],
             text=[f"{mean_abs_normal:.2f}%", f"{mean_abs_event:.2f}%"],
             textposition='auto'
         )])
@@ -311,7 +315,7 @@ with tab_macro:
     with mcol1:
         st.markdown("<h5 style='color:#E2E8F0;'>Cross-Asset Correlations</h5>", unsafe_allow_html=True)
         fig_hm = px.imshow(corr_matrix, text_auto=".2f", aspect="auto", 
-                           color_continuous_scale=px.colors.diverging.RdYlGn,
+                           color_continuous_scale="gray",
                            origin='upper')
         fig_hm.update_layout(**PLOT_TEMPLATE, title='')
         st.plotly_chart(fig_hm, use_container_width=True)
@@ -319,11 +323,8 @@ with tab_macro:
     with mcol2:
         st.markdown("<h5 style='color:#E2E8F0;'>Monte Carlo: 30-Day NIFTY Trajectory</h5>", unsafe_allow_html=True)
         fig_sim = px.line(df_sim, x="Days Post Cut", y="Cumulative Return (%)", color="Scenario",
-                          color_discrete_map={'Routine Easing':'#00D2A6', 'Panic Cut (Crisis)':'#FF4B4B', 'Historical Baseline':'#64748B'})
+                          color_discrete_map=scenario_map)
         fig_sim.update_layout(**PLOT_TEMPLATE, title='', hovermode="x unified")
-        # Add shading for drawdown periods conceptually
-        fig_sim.add_hrect(y0=-50, y1=0, line_width=0, fillcolor="red", opacity=0.05)
-        fig_sim.add_hrect(y0=0, y1=50, line_width=0, fillcolor="green", opacity=0.05)
         st.plotly_chart(fig_sim, use_container_width=True)
 
 # ------------- TAB 5: RAW DATA EXPLORER -------------
@@ -332,21 +333,20 @@ with tab_data:
     st.markdown("Filter, sort, or download the exact historical events contributing to this analysis.")
     
     if len(df_events) > 0:
-        # Display styled dataframe
+        # Display styled dataframe using a greyscale or simplified red-green if possible
+        # We will drop the background gradient to align with 'professional' look
         st.dataframe(
-            df_events.style.background_gradient(cmap='RdYlGn', subset=['Return'])\
-                           .format({'Return': "{:.2f}%", 'Abs_Return': "{:.2f}%", 'VIX_Spike': "{:.1f}"}),
+            df_events.style.format({'Return': "{:.2f}%", 'Abs_Return': "{:.2f}%", 'VIX_Spike': "{:.1f}"}),
             use_container_width=True, height=400
         )
         
         # Download button
         csv = df_events.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="⬇️ Download CSV Dataset",
+            label="Download CSV Dataset",
             data=csv,
             file_name='fomc_nifty_intersect_dataset.csv',
-            mime='text/csv',
-            type='primary'
+            mime='text/csv'
         )
     else:
         st.warning("No data points available for the current filter criteria.")
