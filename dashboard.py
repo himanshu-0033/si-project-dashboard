@@ -75,11 +75,8 @@ def load_data():
     import os
     if os.path.exists("nifty50_data.csv"):
         raw_df = pd.read_csv("nifty50_data.csv")
-        # Clean 'Change %' by dropping the percentage sign and converting to float
-        if raw_df['Change %'].dtype == 'object':
-            returns = raw_df['Change %'].str.replace(',', '').str.rstrip('%').astype(float)
-        else:
-            returns = raw_df['Change %'].astype(float)
+        # Clean 'Change %' by stringifying first to avoid PyArrow/Object dtype mismatches
+        returns = raw_df['Change %'].astype(str).str.replace(',', '', regex=False).str.replace('%', '', regex=False).astype(float)
             
         df_normal = pd.DataFrame({
             'Return': returns,
