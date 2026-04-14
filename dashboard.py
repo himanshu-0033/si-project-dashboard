@@ -71,14 +71,33 @@ RED = "#FF333A"
 @st.cache_data
 def load_data():
     np.random.seed(42)
-    # Generate Normal Days
-    normal_returns = np.random.laplace(loc=0.0410, scale=1.3409/np.sqrt(2), size=6426)
-    df_normal = pd.DataFrame({'Return': normal_returns, 'Group': 'Normal-day', 'Magnitude_bps': 0, 'Crisis_Era': 'None'})
-    df_normal['VIX_Spike'] = np.random.uniform(10, 20, size=6426)
+    # Load Real Nifty 50 Data for Baseline
+    import os
+    if os.path.exists("nifty50_data.csv"):
+        raw_df = pd.read_csv("nifty50_data.csv")
+        # Clean 'Change %' by dropping the percentage sign and converting to float
+        if raw_df['Change %'].dtype == 'object':
+            returns = raw_df['Change %'].str.replace(',', '').str.rstrip('%').astype(float)
+        else:
+            returns = raw_df['Change %'].astype(float)
+            
+        df_normal = pd.DataFrame({
+            'Return': returns,
+            'Group': 'Normal-day',
+            'Magnitude_bps': 0,
+            'Crisis_Era': 'None'
+        })
+    else:
+        # Fallback if file vanishes
+        normal_returns = np.random.laplace(loc=0.0410, scale=1.3409/np.sqrt(2), size=5000)
+        df_normal = pd.DataFrame({'Return': normal_returns, 'Group': 'Normal-day', 'Magnitude_bps': 0, 'Crisis_Era': 'None'})
+        
+    df_normal['VIX_Spike'] = np.random.uniform(10, 20, size=len(df_normal))
     
     # Generate Event Days with synthetic magnitudes and crisis labels
     event_returns = np.random.laplace(loc=0.2322, scale=2.9730/np.sqrt(2), size=31)
-    magnitudes = np.random.choice([25, 50, 75, 100], size=31, p=[0.5, 0.3, 0.15, 0.05])
+    # Including 0 bps cuts in array to support the 0-100 slider range
+    magnitudes = np.random.choice([0, 25, 50, 75, 100], size=31, p=[0.1, 0.4, 0.3, 0.15, 0.05])
     eras = np.random.choice(['Dot-com (2001)', 'GFC (2008)', 'COVID-19 (2020)', 'Non-Crisis'], size=31)
     
     df_event = pd.DataFrame({'Return': event_returns, 'Group': 'Event-day', 'Magnitude_bps': magnitudes, 'Crisis_Era': eras})
@@ -122,7 +141,7 @@ st.sidebar.markdown("## Global Macro Parameters")
 st.sidebar.markdown('Configure the conditions of FOMC rate cuts below:')
 
 selected_era = st.sidebar.selectbox("Macro Environment (Epoch)", ['All'] + list(df[df['Group']=='Event-day']['Crisis_Era'].unique()))
-min_cut = st.sidebar.slider("Minimum Interest Rate Cut (bps)", min_value=25, max_value=100, step=25, value=25)
+min_cut = st.sidebar.slider("Minimum Interest Rate Cut (bps)", min_value=0, max_value=100, step=25, value=0)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## Advanced Features")
