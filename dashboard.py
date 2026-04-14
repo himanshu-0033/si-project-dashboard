@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.figure_factory as ff
 
 # ==========================================
 # 1. PAGE CONFIGURATION & CUSTOM CSS
@@ -80,9 +81,30 @@ def load_data():
     df = pd.concat([df_normal, df_event])
     df['Abs_Return'] = df['Return'].abs()
     df['Direction'] = np.where(df['Return'] > 0, 'Positive', 'Negative')
-    return df
+    
+    # Generate Correlation Data
+    corr_matrix = pd.DataFrame({
+        'NIFTY 50': [1.00, -0.65, 0.45, -0.30],
+        'India VIX': [-0.65, 1.00, -0.20, 0.55],
+        'US 10Y Yield': [0.45, -0.20, 1.00, -0.10],
+        'USD/INR': [-0.30, 0.55, -0.10, 1.00]
+    }, index=['NIFTY 50', 'India VIX', 'US 10Y Yield', 'USD/INR'])
+    
+    # Generate Time Series Simulation Path (30 days post-cut)
+    timesteps = 30
+    sim_routine = np.cumsum(np.random.normal(0.1, 1.2, timesteps))
+    sim_panic = np.cumsum(np.random.normal(-0.5, 2.5, timesteps))
+    sim_normal = np.cumsum(np.random.normal(0.04, 0.9, timesteps))
+    
+    df_sim = pd.DataFrame({
+        'Days Post Cut': list(range(1, 31))*3,
+        'Cumulative Return (%)': np.concatenate([sim_routine, sim_panic, sim_normal]),
+        'Scenario': ['Routine Easing']*30 + ['Panic Cut (Crisis)']*30 + ['Historical Baseline']*30
+    })
+    
+    return df, corr_matrix, df_sim
 
-df = load_data()
+df, corr_matrix, df_sim = load_data()
 
 # ==========================================
 # 3. SIDEBAR NAVIGATION
@@ -129,21 +151,29 @@ with kpi2:
     win_rate = (len(df_events[df_events['Direction'] == 'Positive']) / len(df_events) * 100) if len(df_events) > 0 else 0
     st.metric("Implied Win Rate", f"{win_rate:.1f}%", help="% of events resulting in positive returns")
 with kpi3:
-    mean_abs_return = df_events['Abs_Return'].mean()
-    st.metric("Avg Volatility Spike", f"{mean_abs_return:.2f}%", f"+{mean_abs_return - df_normal['Abs_Return'].mean():.2f}% vs Normal")
+    if len(df_events) > 0:
+        mean_abs_return = df_events['Abs_Return'].mean()
+        delta = mean_abs_return - df_normal['Abs_Return'].mean()
+        st.metric("Avg Volatility Spike", f"{mean_abs_return:.2f}%", f"+{delta:.2f}% vs Normal")
+    else:
+        st.metric("Avg Volatility Spike", "0.00%", "No events")
 with kpi4:
-    max_drawdown = df_events['Return'].min()
-    st.metric("Worst Case Drawdown", f"{max_drawdown:.2f}%", int(max_drawdown), delta_color="inverse")
+    if len(df_events) > 0:
+        max_drawdown = df_events['Return'].min()
+        st.metric("Worst Case Drawdown", f"{max_drawdown:.2f}%", int(max_drawdown), delta_color="inverse")
+    else:
+        st.metric("Worst Case Drawdown", "0.00%", "No events")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
 # 5. DASHBOARD TABS
 # ==========================================
-tab_overview, tab_distribution, tab_volatility = st.tabs([
-    "📊 Market Sentiment & Overview", 
+tab_overview, tab_distribution, tab_volatility, tab_macro = st.tabs([
+    "📊 Market Sentiment", 
     "📈 Distribution Properties", 
-    "⚡ Volatility Dynamics"
+    "⚡ Volatility Dynamics",
+    "🌍 Macro & Simulations"
 ])
 
 # ------------- TAB 1: OVERVIEW -------------
@@ -151,74 +181,80 @@ with tab_overview:
     col1, col2 = st.columns([1, 1.2])
 
     with col1:
-        # Donut Chart - Directional Proportion
-        fig1 = go.Figure(data=[go.Pie(
-            labels=df_events['Direction'], 
-            hole=0.5, 
-            marker_colors=['#00D2A6', '#FF4B4B'] if df_events['Direction'].iloc[0] == 'Positive' else ['#FF4B4B', '#00D2A6'],
-            textinfo='label+percent',
-            hovertemplate="<b>%{label}</b><br>Count: %{value}<extra></extra>"
-        )])
-        fig1.update_layout(**PLOT_TEMPLATE, title='Event Day Sentiment Outlook', annotations=[dict(text=str(len(df_events)), x=0.5, y=0.5, font_size=32, showarrow=False)])
-        st.plotly_chart(fig1, use_container_width=True)
+        if len(df_events) > 0:
+            fig1 = go.Figure(data=[go.Pie(
+                labels=df_events['Direction'], 
+                hole=0.5, 
+                marker_colors=['#00D2A6', '#FF4B4B'] if df_events['Direction'].iloc[0] == 'Positive' else ['#FF4B4B', '#00D2A6'],
+                textinfo='label+percent',
+                hovertemplate="<b>%{label}</b><br>Count: %{value}<extra></extra>"
+            )])
+            fig1.update_layout(**PLOT_TEMPLATE, title='Event Day Sentiment Outlook')
+            st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        # Scatter Plot - Magnitude vs Return
         color_map = {'Dot-com (2001)':'#3B82F6', 'GFC (2008)':'#EC4899', 'COVID-19 (2020)':'#8B5CF6', 'Non-Crisis':'#10B981'}
-        fig3 = px.scatter(
-            df_events, x='Magnitude_bps', y='Return', color='Crisis_Era',
-            size='Abs_Return', size_max=25,
-            labels={'Magnitude_bps': 'Fed Cut Magnitude (bps)', 'Return': 'NIFTY Return (%)'},
-            color_discrete_map=color_map,
-            hover_data=['Crisis_Era']
-        )
-        fig3.update_layout(**PLOT_TEMPLATE, title='Return Dispersal by Cut Magnitude')
-        fig3.add_hline(y=0, line_dash="dash", line_color="#718096", opacity=0.5)
-        st.plotly_chart(fig3, use_container_width=True)
+        if len(df_events) > 0:
+            fig3 = px.scatter(
+                df_events, x='Magnitude_bps', y='Return', color='Crisis_Era',
+                size='Abs_Return', size_max=25,
+                labels={'Magnitude_bps': 'Fed Cut Magnitude (bps)', 'Return': 'NIFTY Return (%)'},
+                color_discrete_map=color_map,
+                hover_data=['Crisis_Era']
+            )
+            fig3.update_layout(**PLOT_TEMPLATE, title='Return Dispersal by Cut Magnitude')
+            fig3.add_hline(y=0, line_dash="dash", line_color="#718096", opacity=0.5)
+            st.plotly_chart(fig3, use_container_width=True)
 
 # ------------- TAB 2: DISTRIBUTION -------------
 with tab_distribution:
-    st.markdown("##### Empirical Fat Tails & Asymmetry")
-    # Histogram - Return Distribution Overlay
-    fig2 = go.Figure()
-    fig2.add_trace(go.Histogram(
-        x=df_normal['Return'], name='Normal Environment', 
-        marker_color='#475569', opacity=0.4, histnorm='probability density', nbinsx=100
-    ))
-    fig2.add_trace(go.Histogram(
-        x=df_events['Return'], name='Post-Cut Environment', 
-        marker_color='#3B82F6', opacity=0.8, histnorm='probability density', nbinsx=30
-    ))
+    dcol1, dcol2 = st.columns([1.5, 1])
     
-    fig2.update_layout(
-        **PLOT_TEMPLATE, 
-        barmode='overlay', 
-        title='',
-        xaxis_title="NIFTY 50 Daily Return (%)",
-        yaxis_title="Probability Density",
-        height=500
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+    with dcol1:
+        st.markdown("<h5 style='color:#E2E8F0;'>Empirical Fat Tails (Histogram)</h5>", unsafe_allow_html=True)
+        fig2 = go.Figure()
+        fig2.add_trace(go.Histogram(
+            x=df_normal['Return'], name='Normal Environment', 
+            marker_color='#475569', opacity=0.4, histnorm='probability density', nbinsx=100
+        ))
+        if len(df_events) > 0:
+            fig2.add_trace(go.Histogram(
+                x=df_events['Return'], name='Post-Cut Environment', 
+                marker_color='#3B82F6', opacity=0.8, histnorm='probability density', nbinsx=30
+            ))
+        fig2.update_layout(
+            **PLOT_TEMPLATE, barmode='overlay', title='',
+            xaxis_title="NIFTY 50 Daily Return (%)", yaxis_title="Probability Density", height=450
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    with dcol2:
+        st.markdown("<h5 style='color:#E2E8F0;'>Probability Density (Violin)</h5>", unsafe_allow_html=True)
+        combined_df = pd.concat([df_normal, df_events])
+        fig_violin = px.violin(combined_df, y="Return", color="Group", box=True, 
+                               color_discrete_map={'Normal-day':'#64748B', 'Event-day':'#EC4899'})
+        fig_violin.update_layout(**PLOT_TEMPLATE, title='', showlegend=False, height=450)
+        st.plotly_chart(fig_violin, use_container_width=True)
 
 # ------------- TAB 3: VOLATILITY -------------
 with tab_volatility:
     col1, col2 = st.columns(2)
     
     with col1:
-        # Box Plot - Return Spread
+        st.markdown("<h5 style='color:#E2E8F0;'>Outlier Probability Expansion</h5>", unsafe_allow_html=True)
         combined_df = pd.concat([df_normal, df_events])
         fig5 = px.box(
             combined_df, x='Group', y='Return', color='Group',
             color_discrete_map={'Normal-day':'#64748B', 'Event-day':'#8B5CF6'}
         )
-        fig5.update_layout(**PLOT_TEMPLATE, title='Outlier Probability Expansion', showlegend=False)
+        fig5.update_layout(**PLOT_TEMPLATE, title='', showlegend=False)
         fig5.update_traces(quartilemethod="inclusive")
         st.plotly_chart(fig5, use_container_width=True)
 
     with col2:
-        # Bar Chart - Mean Absolute Return
+        st.markdown("<h5 style='color:#E2E8F0;'>Implied Absolute Volatility Shift</h5>", unsafe_allow_html=True)
         mean_abs_normal = df_normal['Abs_Return'].mean()
-        mean_abs_event = df_events['Abs_Return'].mean()
+        mean_abs_event = df_events['Abs_Return'].mean() if len(df_events) > 0 else 0
         fig4 = go.Figure([go.Bar(
             x=['Normal Baseline', 'Fed Cut Days'], 
             y=[mean_abs_normal, mean_abs_event],
@@ -226,9 +262,27 @@ with tab_volatility:
             text=[f"{mean_abs_normal:.2f}%", f"{mean_abs_event:.2f}%"],
             textposition='auto'
         )])
-        fig4.update_layout(
-            **PLOT_TEMPLATE, title='Implied Absolute Volatility Shift',
-            yaxis_title='Mean Absolute Return (%)',
-            showlegend=False
-        )
+        fig4.update_layout(**PLOT_TEMPLATE, title='', yaxis_title='Mean Absolute Return (%)', showlegend=False)
         st.plotly_chart(fig4, use_container_width=True)
+
+# ------------- TAB 4: MACRO & SIMULATIONS -------------
+with tab_macro:
+    mcol1, mcol2 = st.columns([1, 1.2])
+    
+    with mcol1:
+        st.markdown("<h5 style='color:#E2E8F0;'>Cross-Asset Correlations</h5>", unsafe_allow_html=True)
+        fig_hm = px.imshow(corr_matrix, text_auto=".2f", aspect="auto", 
+                           color_continuous_scale=px.colors.diverging.RdYlGn,
+                           origin='upper')
+        fig_hm.update_layout(**PLOT_TEMPLATE, title='')
+        st.plotly_chart(fig_hm, use_container_width=True)
+        
+    with mcol2:
+        st.markdown("<h5 style='color:#E2E8F0;'>Monte Carlo: 30-Day NIFTY Trajectory</h5>", unsafe_allow_html=True)
+        fig_sim = px.line(df_sim, x="Days Post Cut", y="Cumulative Return (%)", color="Scenario",
+                          color_discrete_map={'Routine Easing':'#00D2A6', 'Panic Cut (Crisis)':'#FF4B4B', 'Historical Baseline':'#64748B'})
+        fig_sim.update_layout(**PLOT_TEMPLATE, title='', hovermode="x unified")
+        # Add shading for drawdown periods conceptually
+        fig_sim.add_hrect(y0=-50, y1=0, line_width=0, fillcolor="red", opacity=0.05)
+        fig_sim.add_hrect(y0=0, y1=50, line_width=0, fillcolor="green", opacity=0.05)
+        st.plotly_chart(fig_sim, use_container_width=True)
